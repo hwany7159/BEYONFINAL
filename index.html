@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Word Blackout Memorizer v23 (정답 시 자동 다음)</title>
+  <style>
+    :root {
+      --bg:#0b1023; --panel:#0f172a; --border:#1f2937; --text:#e5e7eb; --muted:#94a3b8;
+      --blue:#38bdf8; --green:#22c55e; --red:#ef4444; --yellow:#f59e0b;
+      --safe-bottom: env(safe-area-inset-bottom);
+      --safe-top: env(safe-area-inset-top);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:linear-gradient(180deg,#090f1e 0%,#0f172a 50%,#0b1023 100%);
+      color:var(--text);
+      font-family:System-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Noto Sans,Apple SD Gothic Neo,sans-serif;
+      font-size:16px; /* iOS 입력 확대 방지 */
+    }
+    .container{max-width:1100px;margin:0 auto;padding:16px 16px calc(90px + var(--safe-bottom));}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media (min-width:1024px){.grid{grid-template-columns:360px 1fr}}
+    .card{
+      background:rgba(15,23,42,.82);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+      box-shadow:0 12px 32px rgba(0,0,0,0.45)
+    }
+    h1{font-size:20px;margin:0 0 10px;letter-spacing:.3px}
+    h2{font-size:16px;margin:0 0 8px;color:var(--muted)}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{
+      background:transparent;color:var(--text);
+      border:1px solid var(--border);
+      padding:12px 16px;border-radius:12px;cursor:pointer;
+      min-height:44px; /* iOS 터치권장 */
+      min-width:44px;
+      transition:transform .06s ease, background .2s ease, border-color .2s ease
+    }
+    .btn:active{transform:scale(.98)}
+    .btn.pill{border-radius:9999px}
+    .btn.active{background:#0ea5e9;color:#041318;border-color:#0284c7}
+    .btn.primary{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.4)}
+    .btn.success{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.32)}
+    .btn.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.32)}
+    .btn.cta{background:#22c55e;color:#041318;border-color:#16a34a;font-weight:700}
+    .muted{color:var(--muted);font-size:13px}
+    .field{
+      width:100%;background:#0b1224;color:#e5e7eb;border:1px solid var(--border);
+      border-radius:12px;padding:12px 14px;outline:none;line-height:1.4;
+      font-size:16px; /* iOS 줌 방지 */
+    }
+    textarea.field{min-height:160px;resize:vertical}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px; padding-top:calc(var(--safe-top));}
+    .mask{line-height:1.9;font-size:19px;word-wrap:break-word;min-height:120px;user-select:text}
+    .token{margin-right:.28ch}.punct{margin-right:0}
+    .blackout{background:#000;color:transparent;border-radius:6px;padding:0 .22rem;user-select:none;letter-spacing:.08em}
+    .status{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}
+    .result{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);display:none}
+    .ok{background:rgba(34,197,94,.08)} .no{background:rgba(239,68,68,.08)}
+    .hidden{display:none !important}
+    .progress{width:100%;height:10px;background:#0b1224;border:1px solid #1f2937;border-radius:9999px;overflow:hidden}
+    .bar{height:100%;background:linear-gradient(90deg,#22c55e,#38bdf8);width:0%}
+    .pillBadge{font-size:12px;color:#0ea5e9;border:1px solid #0ea5e9;padding:4px 10px;border-radius:9999px}
+    .tiny{font-size:12px;color:#94a3b8}
+    .banner{padding:10px 12px;border-radius:12px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.35);color:#86efac;margin-bottom:10px}
+    /* 하단 고정 액션바: iOS 키보드/홈인디케이터 회피 */
+    .actionbar{
+      position:fixed;left:0;right:0;bottom:0;
+      background:rgba(10,14,28,.92);
+      border-top:1px solid var(--border);
+      padding:10px 12px calc(8px + var(--safe-bottom));
+      display:flex;gap:8px;align-items:center;
+      backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    }
+    .actionbar .field{flex:1}
+    .actionbar .btn{white-space:nowrap}
+    .hint{font-size:12px;color:#9ca3af;margin-top:4px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Word Blackout Memorizer v23 <span class="muted">(iPhone 최적화 · 정답 시 자동 다음)</span></h1>
+      <div class="muted">Enter로 채점 · iOS Safari는 웹 음성인식 미지원(네이티브 래핑 권장)</div>
+    </div>
+    <div id="doneBanner" class="banner hidden">모든 문장을 완료했어요! 🎉</div>
+    <div class="grid">
+      <!-- Left -->
+      <div class="card">
+        <div id="insecureBanner" class="banner hidden" style="background:rgba(234,179,8,.08);border-color:rgba(234,179,8,.35);color:#fde68a">보안되지 않은 페이지입니다. 마이크 사용을 위해 <b>HTTPS</b> 또는 <b>localhost</b>에서 열어주세요.</div>
+        <h2>설정</h2>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn pill" data-p="0.3">30%</button>
+          <button class="btn pill" data-p="0.5">50%</button>
+          <button class="btn pill" data-p="0.8">80%</button>
+          <button id="reshuffle" class="btn pill">다시 섞기</button>
+          <button id="reveal" class="btn pill">정답 보기</button>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <button id="fullMode" class="btn pill active">전체 문장 입력</button>
+          <button id="blanksMode" class="btn pill">빈칸만 입력</button>
+          <span id="blanksInfo" class="tiny"></span>
+        </div>
+        <div id="status" class="status"></div>
+        <div class="progress"><div id="bar" class="bar"></div></div>
+        <hr style="border:none;border-top:1px solid var(--border); margin:10px 0">
+        <h2>지문 입력</h2>
+        <div id="editorWrap">
+          <textarea id="source" class="field" placeholder="여기에 전체 지문을 붙여넣으세요. '.' 기준 + 약어 예외(U.S., Mr., Dr., …)"></textarea>
+          <div class="row" style="margin-top:8px">
+            <button id="applyStart" class="btn cta">적용 & 시작</button>
+            <span class="muted">시작하면 전체글은 숨겨지고, 한 문장만 보입니다.</span>
+          </div>
+        </div>
+        <div id="lockedWrap" class="hidden">
+          <div class="muted">학습 중: 원문은 숨김. <span id="unlock" style="text-decoration:underline;cursor:pointer">원문 편집하기</span> (진행 초기화)</div>
+        </div>
+      </div>
+
+      <!-- Right -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div class="row">
+            <button id="prev" class="btn" disabled>이전</button>
+            <button id="next" class="btn" title="정답과 무관하게 이동">다음</button>
+          </div>
+          <div class="row">
+            <span id="sentenceBadge" class="pillBadge">문장 0 / 0</span>
+            <button id="speakBtn" class="btn" disabled>문장 듣기</button>
+          </div>
+        </div>
+
+        <div id="mask" class="mask" style="margin-top:10px">
+          <div class="muted">왼쪽에 지문을 붙여넣고 <b>적용 & 시작</b>을 누르세요. (항상 현재 문장 1개만 표시됩니다)</div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="row">
+            <button id="modeType" class="btn pill active" disabled>타이핑</button>
+            <button id="modeVoice" class="btn pill" disabled>음성</button>
+          </div>
+          <!-- 음성박스는 iOS Safari에서 자동 숨김 -->
+          <div id="voiceBox" class="hidden" style="margin-top:8px;">
+            <div class="row">
+              <button id="recStart" class="btn success">녹음 시작</button>
+              <button id="recStop" class="btn warn" disabled>정지</button>
+            </div>
+            <div id="recOut" class="muted" style="margin-top:8px"></div>
+            <div class="hint">정지 버튼을 누르면 채점됩니다.</div>
+            <div id="voiceWarn" class="hint" style="color:#fca5a5"></div>
+          </div>
+          <div id="result" class="result"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 하단 고정 액션바: 입력 + 주요 버튼 -->
+  <div class="actionbar" id="actionbar">
+    <input id="answer" class="field" inputmode="latin" autocapitalize="off" autocomplete="off" autocorrect="off"
+           placeholder="여기에 답을 입력하세요 (Enter로 제출)"/>
+    <button id="check" class="btn primary">채점</button>
+    <button id="fill" class="btn">정답 입력</button>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+    if (!isSecure) $('insecureBanner').classList.remove('hidden');
+
+    if (isIOS){
+      $('modeVoice').classList.add('hidden');
+      $('voiceBox').classList.add('hidden');
+    }
+
+    $("answer").addEventListener('focus', () => {
+      setTimeout(()=>{ window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }); }, 150);
+    });
+
+    $("check").addEventListener('focus', () => {
+      $("check").style.outline = '2px solid #38bdf8';
+      setTimeout(()=> $("check").style.outline = '', 300);
+    });
+
+    function splitByDotWithExceptions(text){
+      const EXCEPT = new Set(['mr','mrs','ms','dr','prof','sr','jr','st','vs','etc','e.g','i.e','u.s','u.k','u.n']);
+      const s = (text||'').replace(/\\s+\\n/g,' ').replace(/\\s{2,}/g,' ').trim();
+      const out = []; let buf = '';
+      for (let i=0;i<s.length;i++){
+        const ch = s[i]; buf += ch;
+        if (ch === '.'){
+          let k = buf.length - 2; let token = '';
+          while (k >= 0 && !/\\s/.test(buf[k])) { token = buf[k] + token; k--; }
+          const base = token.replace(/\\.+$/,'').toLowerCase();
+          let j = i+1; while (j < s.length && s[j] === ' ') j++;
+          const nextCh = s[j] || '';
+          const isAbbrev = EXCEPT.has(base) || /^[A-Za-z]$/.test(base);
+          const nextLooksSentenceStart = /[A-Z"']/.test(nextCh) || nextCh === '';
+          if (isAbbrev && !nextLooksSentenceStart){ continue; } else { out.push(buf.trim()); buf = ''; }
+        }
+      }
+      if (buf.trim().length) { const t = buf.trim(); out.push(/\\.$/.test(t) ? t : t + '.'); }
+      return out.filter(Boolean);
+    }
+
+    function tokenize(sentence){
+      const tokens = sentence.match(/[A-Za-z]+(?:’[A-Za-z]+)?|\\d+|[^\\s\\w]/g) || [];
+      return tokens.map(t => ({ text: t, isWord: /^[A-Za-z0-9]/.test(t), isPunct: /[^\\s\\w]/.test(t) && !/^[A-Za-z0-9]/.test(t) }));
+    }
+    function mulberry32(a){ return function(){ var t=a+=0x6D2B79F5; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; } }
+    function maskTokens(tokens, percent, seed){
+      const idxs = tokens.map((t,i)=>t.isWord?i:-1).filter(i=>i>=0);
+      const target = Math.max(1, Math.round(idxs.length*percent));
+      const rng = mulberry32(seed || Math.floor(Math.random()*1e9));
+      for (let i=idxs.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const tmp=idxs[i]; idxs[i]=idxs[j]; idxs[j]=tmp; }
+      const set = new Set(idxs.slice(0,target));
+      return tokens.map((t,i)=> ({...t, masked: t.isWord && set.has(i)}));
+    }
+    function escapeHTML(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+    function normalize(s){ return (s||'').toLowerCase().replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/\\s+/g,' ').trim(); }
+    function lev(a,b){ a=normalize(a); b=normalize(b);
+      const m=a.length,n=b.length, dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+      for(let i=0;i<=m;i++) dp[i][0]=i; for(let j=0;j<=n;j++) dp[0][j]=j;
+      for(let i=1;i<=m;i++){ for(let j=1;j<=n;j++){ const c=a[i-1]===b[j-1]?0:1; dp[i][j]=Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+c); } }
+      return dp[m][n];
+    }
+    function sim(a,b){ const L=Math.max(normalize(a).length, normalize(b).length)||1; return 1 - (lev(a,b)/L); }
+
+    const maskEl = $("mask"), statusEl = $("status"), bar = $("bar"), badge = $("sentenceBadge");
+    const prevBtn = $("prev"), nextBtn = $("next"), speakBtn = $("speakBtn");
+    const modeTypeBtn = $("modeType"), modeVoiceBtn = $("modeVoice");
+    const answerEl = $("answer"), checkBtn = $("check"), fillBtn = $("fill");
+    const applyStart = $("applyStart"), sourceEl = $("source");
+    const revealBtn = $("reveal"), reshuffle = $("reshuffle");
+    const editorWrap = $("editorWrap"), lockedWrap = $("lockedWrap");
+    const fullModeBtn = $("fullMode"), blanksModeBtn = $("blanksMode"), blanksInfo = $("blanksInfo");
+    const recStart = $("recStart"), recStop = $("recStop"), recOut = $("recOut"), voiceWarn = $("voiceWarn");
+    const resultBox = $("result"); const doneBanner = $("doneBanner");
+
+    let p = 0.3, seed = 42, idx = 0;
+    let sentences = [];
+    let score = { ok:0, total:0 };
+    let started = false;
+    let blanksMode = false;
+    let currentMaskedWords = [];
+    let recObj = null;
+    let recBuffer = "";
+
+    function enablePractice(enabled){
+      [prevBtn, speakBtn, modeTypeBtn].forEach(b => b.disabled = !enabled);
+      if (!isIOS) modeVoiceBtn.disabled = !enabled;
+      nextBtn.disabled = !enabled ? true : false; // 학습 중 항상 활성
+    }
+    function progressUpdate(){
+      const pct = sentences.length ? ((idx) / sentences.length) * 100 : 0;
+      bar.style.width = Math.min(100, pct) + '%';
+      badge.textContent = `문장 ${sentences.length ? (idx+1) : 0} / ${sentences.length}`;
+    }
+    function render(){
+      const s = sentences[idx] || '';
+      const toks = tokenize(s);
+      const masked = maskTokens(toks, p, seed);
+      currentMaskedWords = masked.filter(t=>t.masked && t.isWord).map(t=>t.text);
+      maskEl.innerHTML = masked.map(t => t.isPunct ? `<span class="token punct">${escapeHTML(t.text)}</span>`
+        : (!t.masked ? `<span class="token">${escapeHTML(t.text)}</span>` : `<span class="token blackout">${escapeHTML(t.text)}</span>`)).join(' ');
+      statusEl.innerHTML = `<div>진행: <b>${sentences.length? (idx+1) : 0} / ${sentences.length}</b></div><div>점수: <b>${score.ok} / ${score.total}</b></div>`;
+      resultBox.style.display = "none";
+      answerEl.value = '';
+      blanksInfo.textContent = blanksMode ? `(빈칸 수: ${currentMaskedWords.length}개)` : '';
+      progressUpdate();
+      nextBtn.disabled = !started ? true : false;
+      doneBanner.classList.add('hidden');
+    }
+    function setPercent(newP){ p = newP; highlightP(); if (started) render(); }
+    function highlightP(){ document.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('active', Number(b.dataset.p) === p)); }
+    function updatePlaceholders(){
+      if (!blanksMode){
+        answerEl.placeholder = "현재 문장을 그대로 입력하세요 (Enter 제출)";
+      } else {
+        answerEl.placeholder = currentMaskedWords.length
+          ? `가려진 단어 ${currentMaskedWords.length}개를 순서대로 입력 (공백/쉼표/문장부호 구분, Enter 제출)`
+          : "가려진 단어가 없어요. (가릴 비율을 올리거나 다시 섞기)";
+      }
+    }
+    highlightP();
+
+    document.querySelectorAll('[data-p]').forEach(b => b.addEventListener('click', () => setPercent(Number(b.dataset.p))));
+    reshuffle.addEventListener('click', () => { seed = Math.floor(Math.random()*1e9); if (started) render(); });
+    revealBtn.addEventListener('click', () => { if (!started) return; p = 0; highlightP(); render(); });
+
+    fullModeBtn.addEventListener('click', () => { blanksMode = false; fullModeBtn.classList.add('active'); blanksModeBtn.classList.remove('active'); updatePlaceholders(); });
+    blanksModeBtn.addEventListener('click', () => { blanksMode = true; blanksModeBtn.classList.add('active'); fullModeBtn.classList.remove('active'); updatePlaceholders(); });
+
+    prevBtn.addEventListener('click', () => { if (!started) return; if (idx>0) { idx -= 1; render(); } });
+    nextBtn.addEventListener('click', () => { if (!started) return; if (idx < sentences.length-1) { idx += 1; render(); } });
+
+    speakBtn.addEventListener('click', () => {
+      if (!started) return;
+      try{
+        const u=new SpeechSynthesisUtterance(sentences[idx]||''); u.lang='en-US'; u.rate=0.95;
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      }catch(e){ alert('이 기기에서 음성 출력이 제한될 수 있습니다.'); }
+    });
+
+    applyStart.addEventListener('click', () => {
+      const raw = sourceEl.value || '';
+      const sents = splitByDotWithExceptions(raw);
+      if (!sents.length) { alert("지문이 비어 있거나 '.'이 없습니다. '.'으로 문장을 구분해 주세요."); return; }
+      sentences = sents; idx = 0; score = { ok:0, total:0 }; started = true;
+      editorWrap.classList.add('hidden'); lockedWrap.classList.remove('hidden');
+      enablePractice(true); render();
+      modeTypeBtn.classList.add('active');
+      if (!isIOS){ modeVoiceBtn.classList.remove('active'); }
+      updatePlaceholders();
+      setTimeout(()=> $('answer').focus(), 50);
+    });
+
+    $("unlock").addEventListener('click', () => {
+      started = false; enablePractice(false);
+      editorWrap.classList.remove('hidden'); lockedWrap.classList.add('hidden');
+      maskEl.innerHTML = '<div class="muted">왼쪽에 지문을 붙여넣고 <b>적용 & 시작</b>을 누르세요. (항상 현재 문장 1개만 표시됩니다)</div>';
+      statusEl.innerHTML = ''; bar.style.width = '0%'; $("sentenceBadge").textContent='문장 0 / 0';
+      answerEl.value=''; resultBox.style.display='none';
+    });
+
+    function showResult(ok, msgHTML){
+      resultBox.className = 'result ' + (ok?'ok':'no');
+      resultBox.style.display = 'block';
+      resultBox.innerHTML = msgHTML;
+    }
+    function checkAnswerFull(text){
+      const truth = sentences[idx] || '';
+      const s = sim(text, truth);
+      const ok = s >= 0.9;
+      const html = `<div>유사도: <b>${Math.round(s*100)}%</b></div>` + (ok ? '' : `<div style="margin-top:6px">정답: <b>${escapeHTML(truth)}</b></div>`);
+      return {ok, html};
+    }
+    function splitAnswerWords(text){
+      return (text || '').trim().split(/[^\p{L}\p{N}'’]+/u).filter(Boolean);
+    }
+    function wordSim(a,b){
+      a = (a||'').replace(/[^A-Za-z0-9']/g,'').toLowerCase();
+      b = (b||'').replace(/[^A-Za-z0-9']/g,'').toLowerCase();
+      if (!a && !b) return 1; if (!a || !b) return 0;
+      const m=a.length,n=b.length; const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+      for(let i=1;i<=m;i++){ for(let j=1;j<=n;j++){ const c=a[i-1]===b[j-1]?0:1; dp[i][j]=Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+c); } }
+      return 1 - dp[m][n] / Math.max(m,n);
+    }
+    function checkAnswerBlanks(text){
+      const s = sentences[idx];
+      const toks = tokenize(s);
+      const masked = maskTokens(toks, p, seed);
+      const truthWords = masked.filter(t=>t.masked && t.isWord).map(t=>t.text);
+      const ansWords = splitAnswerWords(text);
+      if (truthWords.length === 0){
+        return { ok:false, html:`<div>이 문장에는 가려진 단어가 없습니다. 가릴 비율을 올리거나 <b>다시 섞기</b>를 눌러보세요.</div>` };
+      }
+      if (ansWords.length !== truthWords.length){
+        const html = `<div>단어 개수가 달라요: <b>${ansWords.length}</b>개 입력 / 필요 <b>${truthWords.length}</b>개</div>
+                      <div class="tiny" style="margin-top:6px">힌트: 공백/쉼표/문장부호로 단어를 구분해 주세요.</div>`;
+        return { ok:false, html };
+      }
+      let allOk = true; let rows = [];
+      for (let k=0;k<truthWords.length;k++){
+        const sc = wordSim(ansWords[k], truthWords[k]);
+        const hit = sc >= 0.85;
+        allOk = allOk && hit;
+        rows.push(`<tr><td>${k+1}</td><td>${escapeHTML(truthWords[k])}</td><td>${escapeHTML(ansWords[k])}</td><td>${Math.round(sc*100)}%</td></tr>`);
+      }
+      const html = (allOk
+        ? `<div>정답! (빈칸 ${truthWords.length}개 모두 일치)</div>`
+        : `<div>일부 단어가 달라요.</div>`) +
+        `<div style="overflow:auto"><table style="border-collapse:collapse;margin-top:8px;font-size:13px">
+          <thead><tr><th style="padding:4px 8px;border-bottom:1px solid #334155;text-align:left">#</th>
+          <th style="padding:4px 8px;border-bottom:1px solid #334155;text-align:left">정답</th>
+          <th style="padding:4px 8px;border-bottom:1px solid #334155;text-align:left">입력</th>
+          <th style="padding:4px 8px;border-bottom:1px solid #334155;text-align:left">유사도</th></tr></thead>
+          <tbody>${rows.join('')}</tbody></table></div>`;
+      return { ok: allOk, html };
+    }
+    function checkAnswer(text){
+      if (!started) return;
+      const res = (!blanksMode) ? checkAnswerFull(text) : checkAnswerBlanks(text);
+      score.total += 1; if (res.ok) score.ok += 1;
+      showResult(res.ok, res.html);
+      statusEl.innerHTML = `<div>진행: <b>${idx+1} / ${sentences.length}</b></div><div>점수: <b>${score.ok} / ${score.total}</b></div>`;
+      // === 정답이면 자동 다음 ===
+      if (res.ok){
+        setTimeout(()=>{
+          if (idx < sentences.length - 1){
+            idx += 1; render();
+          } else {
+            doneBanner.classList.remove('hidden');
+          }
+          $('answer').focus();
+        }, 550);
+      } else {
+        // 오답이면 입력창에 바로 포커스
+        setTimeout(()=> $('answer').focus(), 0);
+      }
+    }
+    // 전역 노출 (Capacitor 네이티브 어댑터가 사용할 수 있도록)
+    window.checkAnswer = checkAnswer;
+
+    // 제출: Enter 또는 '채점' 버튼
+    answerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter'){ e.preventDefault(); checkAnswer(answerEl.value); } });
+    checkBtn.addEventListener('click', () => checkAnswer(answerEl.value));
+    fillBtn.addEventListener('click', () => { if (!started) return; answerEl.value = sentences[idx] || ''; answerEl.focus(); });
+
+    // ===== 음성 인식 (iOS는 미지원, Android Chrome 등에서만 노출) =====
+    function stopRec(submit){
+      try { if (recObj) recObj.stop(); } catch(_) {}
+      if (submit){
+        const text = (recBuffer || '').trim().replace(/\\s+/g,' ');
+        if (text) checkAnswer(text);
+        else if (voiceWarn) voiceWarn.textContent = '음성이 인식되지 않았습니다.';
+      }
+    }
+    function startRecognition(){
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { if (voiceWarn) voiceWarn.textContent = '이 브라우저는 웹 음성 인식을 지원하지 않습니다.'; return; }
+      if (!isSecure) { if (voiceWarn) voiceWarn.textContent = 'HTTPS 또는 localhost에서 실행해 주세요.'; return; }
+      recObj = new SR();
+      recObj.lang = 'en-US'; recObj.continuous = true; recObj.interimResults = false;
+      recBuffer = ""; if (recOut) recOut.textContent = '듣는 중...';
+      recObj.onresult = (e) => {
+        for (let i=e.resultIndex; i<e.results.length; i++){
+          const r = e.results[i];
+          if (r.isFinal){
+            const chunk = (r[0].transcript || '').trim();
+            if (chunk){ recBuffer = (recBuffer + ' ' + chunk).trim().replace(/\\s+/g,' '); }
+          }
+        }
+        if (recOut) recOut.textContent = `인식: "${recBuffer}"`;
+      };
+      recObj.onerror = (ev) => { if (voiceWarn) voiceWarn.textContent = '음성 인식 오류: ' + (ev && ev.error || 'unknown'); stopRec(true); };
+      recObj.onend = () => { stopRec(true); };
+      recObj.start();
+    }
+    if (!isIOS){
+      $('modeVoice').disabled = true; // 시작 전엔 비활성
+      $('modeVoice').addEventListener('click', () => {
+        if (!started) return;
+        $('voiceBox').classList.remove('hidden');
+        startRecognition();
+      });
+      if ($('recStart')) $('recStart').addEventListener('click', startRecognition);
+      if ($('recStop')) $('recStop').addEventListener('click', () => stopRec(true));
+    }
+
+    // 초기 상태
+    (function init(){
+      statusEl.innerHTML = '';
+      maskEl.innerHTML = '<div class="muted">왼쪽에 지문을 붙여넣고 <b>적용 & 시작</b>을 누르세요. (항상 현재 문장 1개만 표시됩니다)</div>';
+      nextBtn.disabled = true; // 시작 전 비활성
+    })();
+  </script>
+
+  <!-- (선택) Capacitor 네이티브 어댑터: 별도 파일에서 붙여도 됨 -->
+  <script>
+  (async function(){
+    const isCap = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    const Plugins = window.Capacitor && window.Capacitor.Plugins;
+    const SR = Plugins && Plugins.SpeechRecognition;
+    if (!isCap || !SR) return;
+    // iOS도 음성 버튼/상자 노출
+    const vb = document.getElementById('voiceBox'); const mv = document.getElementById('modeVoice');
+    if (mv) mv.classList.remove('hidden'); if (vb) vb.classList.remove('hidden');
+    try { await SR.requestPermission(); } catch(e){ console.log(e); }
+    mv && mv.addEventListener('click', async () => {
+      try {
+        const voiceWarn = document.getElementById('voiceWarn'); const recOut = document.getElementById('recOut');
+        if (voiceWarn) voiceWarn.textContent = '';
+        if (recOut) recOut.textContent = '듣는 중...';
+        await SR.start({ language: 'en-US', popup: true, partialResults: true });
+      } catch(e){ const voiceWarn = document.getElementById('voiceWarn'); if (voiceWarn) voiceWarn.textContent = '음성 시작 실패: ' + (e.message||e); }
+    });
+    SR.addListener && SR.addListener('result', (data) => {
+      const text = (data && (data.matches?.[0] || data.text || '')).trim();
+      const recOut = document.getElementById('recOut');
+      if (recOut) recOut.textContent = `인식: "${text}"`;
+      if (text) { if (typeof window.checkAnswer === 'function') window.checkAnswer(text); }
+    });
+    SR.addListener && SR.addListener('partialResults', (data) => {
+      const text = (data && (data.value?.[0] || data.matches?.[0] || '')).trim();
+      const recOut = document.getElementById('recOut');
+      if (recOut && text) recOut.textContent = `인식: "${text}"`;
+    });
+  })();
+  </script>
+</body>
+</html>
